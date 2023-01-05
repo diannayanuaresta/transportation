@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<title>North West Corner</title>
+	<link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.min.css" />
+	<style>
+		table {
+			border-collapse: collapse;
+			text-align: center;
+		}
+
+		th,
+		td {
+			border: 1px solid black;
+			padding: 2.5px;
+		}
+
+		.cost,
+		.blank {
+			width: 100px;
+		}
+
+		.blank {
+			border-bottom: 0;
+		}
+
+		.x {
+			border-top: 0;
+			height: 25px;
+		}
+
+		.supply,
+		.demand {
+			width: 100px;
+		}
+
+		.hidden1 {
+			display: none;
+		}
+
+		.line-through {
+			text-decoration: line-through;
+		}
+
+		.yellow {
+			background-color: yellow;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<div class="row">
+			<div class="col-md-6">
+				<h2>Inisialisasi Tabel NWC</h2>
+
+				<table class="table table-striped table-bordered" cellspacing="0" width="100%">
+					<tr>
+						<td>Jumlah Supply</td>
+						<td>Jumlah Demand</td>
+					</tr>
+					<tr>
+						<td><input class="form-control form-control-sm" type="number" min="0" name="jml-supply"
+								id="jml-supply" placeholder="jumlah supply"></td>
+						<td><input class="form-control form-control-sm" type="number" min="0" name="jml-demand"
+								id="jml-demand" placeholder="jumlah demand"></td>
+					</tr>
+					<tr>
+						<td colspan="3"><button type="button" id="init" class="btn btn-success">Buat Tabel NWC</button>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="col-md-6">
+				<div class="hidden1" id="tbl-nwc-container">
+					<h2>Tabel NWC</h2>
+					<table class="table table-striped table-bordered" cellspacing="0" width="100%">
+						<tbody id="tbl-nwc"></tbody>
+						<tfoot>
+							<tr>
+								<td id="buttons">
+									<button type="button" id="next" class="btn btn-primary">Hitung</button> <button
+										type="button" id="stepping-stone" class="hidden1 btn btn-danger">Stepping
+										Stone</button>
+								</td>
+							</tr>
+						</tfoot>
+					</table>
+				</div>
+
+			</div>
+		</div>
+
+		<div class="hidden1 alert alert-success" id="hasil-nwc"></div>
+
+
+		<div class="hidden1 alert alert-danger" id="hasil-ss"></div>
+		<div class="hidden1 alert alert-info" id="hasil-step"></div>
+
+		<div class="hidden1 alert alert-info" id="hasil-ss2"></div>
+
+	</div>
+	<script src="jquery-3.2.1.min.js"></script>
+	<script>
+		var step = 0,
+			steppingStone = 0,
+			supply = [],
+			demand = [],
+			data = [],
+			jmlSupply,
+			jmlDemand,
+			stepRow = 0,
+			stepCol = 0,
+			total,
+			sisa;
+		$(document).ready(function () {
+			// inisialisasi tabel
+			$('#init').click(function (event) {
+				event.preventDefault();
+
+				step = 0;
+				steppingStone = 0;
+				supply = [];
+				demand = [];
+				data = [];
+				stepRow = 0;
+				stepCol = 0;
+				total = 0;
+				sisa = 0;
+
+				$('#stepping-stone, #hasil-nwc, #hasil-ss').fadeOut(500);
+				$('#next').html('Hitung').fadeIn(500);
+
+				jmlSupply = parseInt($('#jml-supply').val());
+				jmlDemand = parseInt($('#jml-demand').val());
+
+				var tbl = '<tr>' +
+					'<th>&nbsp;</th>';
+				for (var i = 1; i <= parseInt($('#jml-demand').val()); i++) {
+					tbl += '<th colspan="2">Tujuan-' + i + '</th>';
+				}
+				tbl += '<th>Supply</th>' +
+					'</tr>';
+				for (var i = 1; i <= parseInt($('#jml-supply').val()); i++) {
+					tbl += '<tr>' +
+						'<th rowspan="2">Asal-' + i + '</th>';
+					for (var j = 1; j <= parseInt($('#jml-demand').val()); j++) {
+						tbl += '<td class="blank" id="blank-' + i + '-' + j + '">&nbsp;</td>' +
+							'<td><input type="number" min="0" class="cost form-control form-control-sm" name="cost" data-asal="' + i + '" data-tujuan="' + j + '"></td>';
+					}
+					tbl += '<td rowspan="2"><input type="number" min="0" name="supply" class="supply form-control form-control-sm" data-asal="' + i + '"></td>' +
+						'</tr>' +
+						'<tr>';
+					for (var j = 1; j <= parseInt($('#jml-demand').val()); j++) {
+						tbl += '<td colspan="2" class="x" id="x-' + i + '-' + j + '" data-asal="' + i + '" data-tujuan="' + j + '">&nbsp;</td>';
+					}
+					tbl += '</tr>';
+				}
+				tbl += '<tr>' +
+					'<th>Demand</th>';
+				var col = 1;
+				for (var i = 1; i <= parseInt($('#jml-demand').val()); i++) {
+					col += 2;
+					tbl += '<td colspan="2"><input type="number" min="0" class="demand form-control form-control-sm" name="demand" data-tujuan="' + i + '"></td>';
+				}
+				tbl += '<td>&nbsp;</td>' +
+					'</tr>';
+				col++;
+
+				$('#buttons').attr('colspan', col);
+				$('#tbl-nwc').html(tbl);
+				$('#tbl-nwc-container').slideDown(500);
+			});
+
+			// perhitungan NWC
+			$('#next').click(function (event) {
+				event.preventDefault();
+				$('.x, .blank').removeClass('yellow');
+
+				// jika step masih 0
+				if (step == 0) {
+					supply = [];
+					demand = [];
+					data = [];
+
+					var totalSupply = 0, totalDemand = 0;
+
+					$('.supply').each(function (index, el) {
+						supply.push({
+							asal: $(el).data('asal'),
+							nilai: parseInt($(el).val()),
+							sisa: parseInt($(el).val())
+						});
+
+						totalSupply += parseInt($(el).val());
+					});
+
+					$('.demand').each(function (index, el) {
+						demand.push({
+							tujuan: $(el).data('tujuan'),
+							nilai: parseInt($(el).val()),
+							sisa: parseInt($(el).val())
+						});
+
+						totalDemand += parseInt($(el).val());
+					});
+
+					if (totalSupply != totalDemand) {
+						alert('Total Supply tidak sama dengan Total Demand !');
+					}
+					else {
+						total = totalSupply;
+						sisa = totalSupply;
+
+						$('.cost').each(function (index, el) {
+							if ($(el).val() == '') {
+								alert("Cost tidak boleh kosong, isikan dengan 0 untuk mengosongi");
+								return false;
+							}
+							else {
+								var asal = $(el).data('asal');
+								var tujuan = $(el).data('tujuan');
+
+								var row = asal - 1;
+								var col = tujuan - 1;
+
+								if (typeof data[row] === 'undefined') {
+									data[row] = [];
+								}
+								data[row][col] = {
+									asal: asal,
+									tujuan: tujuan,
+									cost: parseInt($(el).val()),
+									x: 0,
+									temp: 0
+								};
+							}
+						});
+						$('.supply, .demand, .cost').attr('disabled', true);
+						$('#next').html('Next');
+					}
+
+					step++;
+					console.log('supply', supply);
+					console.log('demand', demand);
+					console.log('data', data);
+				}
+				// jika perhitungan dimulai
+				else {
+					// jika variabel sisa != 0 maka lanjut perhitungan
+					if (sisa != 0) {
+						// breakloop ini supaya bisa nampilkan step by step
+						var breakLoop = false;
+						for (var i = stepRow; i < jmlSupply; i++) {
+							for (var j = stepCol; j < jmlDemand; j++) {
+								if (supply[i].sisa != 0 && demand[j].sisa != 0) {
+									var x = 0;
+									// bandingkan sisa supply sama demand
+									// kalo supply lebih kecil, masukkan ke tabel
+									if (supply[i].sisa < demand[j].sisa) {
+										x = supply[i].sisa;
+										supply[i].sisa -= x;
+										demand[j].sisa -= x;
+										sisa -= x;
+										data[i][j].x = x;
+										data[i][j].temp = x;
+									}
+									// ini kalo supply >= demand
+									else {
+										x = demand[j].sisa;
+										supply[i].sisa -= x;
+										demand[j].sisa -= x;
+										sisa -= x;
+										data[i][j].x = x;
+										data[i][j].temp = x;
+									}
+
+									// tampikan di tabel
+									$('#x-' + (i + 1) + '-' + (j + 1) + ', #blank-' + (i + 1) + '-' + (j + 1)).addClass('yellow');
+									$('#x-' + (i + 1) + '-' + (j + 1)).html(x);
+
+									stepRow = i;
+									stepCol = j;
+									breakLoop = true;
+								}
+
+								// kalo breakloopnya true, looping berhenti, nanti lanjut kalau dipencet next lagi
+								if (breakLoop) {
+									break;
+								}
+							}
+
+							// kalo breakloopnya true, looping berhenti, nanti lanjut kalau dipencet next lagi
+							if (breakLoop) {
+								break;
+							}
+						}
+
+						if (sisa == 0) {
+							$('#next').html('Hasil NWC');
+						}
+
+						console.log('step', step);
+						console.log('supply', supply);
+						console.log('demand', demand);
+						console.log('data', data);
+						step++;
+					}
+					// jika variabel sisa sudah 0, maka dihitung total NWC
+					else {
+						var totalNwc = 0;
+						var txt = 'Hasil North West Corner = ';
+						for (var i = 0; i < jmlSupply; i++) {
+							for (var j = 0; j < jmlDemand; j++) {
+								if (data[i][j].x != 0) {
+									txt += data[i][j].cost + ' × ' + data[i][j].x;
+									if (i < jmlSupply - 1) {
+										txt += ' + ';
+									}
+
+									totalNwc += data[i][j].cost * data[i][j].x;
+								}
+							}
+						}
+						txt += ' = ' + totalNwc;
+						$('#next').fadeOut(500);
+						$('#stepping-stone').fadeIn(500);
+						$('#hasil-nwc').html(txt).fadeIn(500);
+					}
+				}
+			});
+
+			$('#stepping-stone').click(function (event) {
+				event.preventDefault();
+				var sortData = [];
+
+				console.log('data sebelum stepping stone', data);
+
+				// Cari data yang cost nya besar tapi nilainya gak kosong
+				for (var i = 0; i < jmlSupply; i++) {
+					for (var j = 0; j < jmlDemand; j++) {
+						if (data[i][j].x != 0) {
+							sortData.push(data[i][j]);
+						}
+					}
+				}
+
+				// Di urutkan berdasarkan cost nya
+				sortData.sort(function (a, b) {
+					return b.cost - a.cost;
+				});
+
+				console.log('kandidat stepping stone', sortData);
+
+				var compareData = [];
+				var indexTerpilih;
+				// Cari pojokan yang kalau dikurangi tidak minus
+				for (var i = 0; i < sortData.length; i++) {
+					compareData = [];
+					var row = sortData[i].asal - 1;
+					var col = sortData[i].tujuan - 1;
+
+					if (typeof data[row - 1] != 'undefined' && typeof data[row - 1][col - 1] != 'undefined' && data[row - 1][col - 1].x - sortData[i].x >= 0) {
+						compareData.push([
+							data[row - 1][col - 1], 'kiri-atas'
+						]);
+					}
+
+					if (typeof data[row - 1] != 'undefined' && typeof data[row - 1][col + 1] != 'undefined' && data[row - 1][col + 1].x - sortData[i].x >= 0) {
+						compareData.push([
+							data[row - 1][col + 1], 'kanan-atas'
+						]);
+					}
+
+					if (typeof data[row + 1] != 'undefined' && typeof data[row + 1][col - 1] != 'undefined' && data[row + 1][col - 1].x - sortData[i].x >= 0) {
+						compareData.push([
+							data[row + 1][col - 1], 'kiri-bawah'
+						]);
+					}
+
+					if (typeof data[row + 1] != 'undefined' && typeof data[row + 1][col + 1] != 'undefined' && data[row + 1][col + 1].x - sortData[i].x >= 0) {
+						compareData.push([
+							data[row + 1][col + 1], 'kanan-bawah'
+						]);
+					}
+
+					if (compareData.length != 0) {
+						indexTerpilih = i;
+						break;
+					}
+				}
+
+				// Urutkan pojokan berdasarkan cost yang paling besar
+				compareData.sort(function (a, b) {
+					return b[0].cost - a[0].cost;
+				});
+
+				console.log('data terpilih', sortData[indexTerpilih]);
+				console.log('kandidat pojok', compareData);
+
+				// ganti value
+				var valueTerpilih = sortData[indexTerpilih].x;
+				var rowTerpilih = sortData[indexTerpilih].asal;
+				var colTerpilih = sortData[indexTerpilih].tujuan;
+
+				// kasih tanda kolom patokan
+				$('.x, .blank').removeClass('yellow');
+				$('#x-' + (rowTerpilih) + '-' + (colTerpilih) + ', #blank-' + (rowTerpilih) + '-' + (colTerpilih)).addClass('yellow');
+
+				var row = sortData[indexTerpilih].asal - 1;
+				var col = sortData[indexTerpilih].tujuan - 1;
+				// Kalau ada pojokan yang cocok, lakukan steping stone
+				if (typeof compareData[0] != 'undefined') {
+					switch (compareData[0][1]) {
+						case 'kiri-atas':
+							// kolom patokan
+							data[row][col].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row][col].temp + '</span> ' + data[row][col].x);
+							data[row][col].temp = data[row][col].x;
+
+							// kiri atas
+							data[row - 1][col - 1].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih - 1) + '-' + (colTerpilih - 1)).html('<span class="line-through">' + data[row - 1][col - 1].temp + '</span> ' + data[row - 1][col - 1].x);
+							data[row - 1][col - 1].temp = data[row - 1][col - 1].x;
+
+							// atasnya
+							data[row - 1][col].x += valueTerpilih;
+							$('#x-' + (rowTerpilih - 1) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row - 1][col].temp + '</span> ' + data[row - 1][col].x);
+							data[row - 1][col].temp = data[row - 1][col].x;
+
+							// samping kiri
+							data[row][col - 1].x += valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih - 1)).html('<span class="line-through">' + data[row][col - 1].temp + '</span> ' + data[row][col - 1].x);
+							data[row][col - 1].temp = data[row][col - 1].x;
+
+							break;
+						case 'kanan-atas':
+							// kolom patokan
+							data[row][col].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row][col].temp + '</span> ' + data[row][col].x);
+							data[row][col].temp = data[row][col].x;
+
+							// kanan atas
+							data[row - 1][col + 1].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih - 1) + '-' + (colTerpilih + 1)).html('<span class="line-through">' + data[row - 1][col + 1].temp + '</span> ' + data[row - 1][col + 1].x);
+							data[row - 1][col + 1].temp = data[row - 1][col + 1].x;
+
+							// atasnya
+							data[row - 1][col].x += valueTerpilih;
+							$('#x-' + (rowTerpilih - 1) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row - 1][col].temp + '</span> ' + data[row - 1][col].x);
+							data[row - 1][col].temp = data[row - 1][col].x;
+
+							// samping kanan
+							data[row][col + 1].x += valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih + 1)).html('<span class="line-through">' + data[row][col + 1].temp + '</span> ' + data[row][col + 1].x);
+							data[row][col + 1].temp = data[row][col + 1].x;
+
+							break;
+						case 'kiri-bawah':
+							// kolom patokan
+							data[row][col].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row][col].temp + '</span> ' + data[row][col].x);
+							data[row][col].temp = data[row][col].x;
+
+							// kiri bawah
+							data[row + 1][col - 1].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih + 1) + '-' + (colTerpilih - 1)).html('<span class="line-through">' + data[row + 1][col - 1].temp + '</span> ' + data[row + 1][col - 1].x);
+							data[row + 1][col - 1].temp = data[row + 1][col - 1].x;
+
+							// bawahnya
+							data[row + 1][col].x += valueTerpilih;
+							$('#x-' + (rowTerpilih + 1) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row + 1][col].temp + '</span> ' + data[row + 1][col].x);
+							data[row + 1][col].temp = data[row + 1][col].x;
+
+							// samping kiri
+							data[row][col - 1].x += valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih - 1)).html('<span class="line-through">' + data[row][col - 1].temp + '</span> ' + data[row][col - 1].x);
+							data[row][col - 1].temp = data[row][col - 1].x;
+
+							break;
+						case 'kanan-bawah':
+							// kolom patokan
+							data[row][col].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row][col].temp + '</span> ' + data[row][col].x);
+							data[row][col].temp = data[row][col].x;
+
+							// kanan bawah
+							data[row + 1][col + 1].x -= valueTerpilih;
+							$('#x-' + (rowTerpilih + 1) + '-' + (colTerpilih + 1)).html('<span class="line-through">' + data[row + 1][col + 1].temp + '</span> ' + data[row + 1][col + 1].x);
+							data[row + 1][col + 1].temp = data[row + 1][col + 1].x;
+
+							// bawahnya
+							data[row + 1][col].x += valueTerpilih;
+							$('#x-' + (rowTerpilih + 1) + '-' + (colTerpilih)).html('<span class="line-through">' + data[row + 1][col].temp + '</span> ' + data[row + 1][col].x);
+							data[row + 1][col].temp = data[row + 1][col].x;
+
+							// samping kanan
+							data[row][col + 1].x += valueTerpilih;
+							$('#x-' + (rowTerpilih) + '-' + (colTerpilih + 1)).html('<span class="line-through">' + data[row][col + 1].temp + '</span> ' + data[row][col + 1].x);
+							data[row][col + 1].temp = data[row][col + 1].x;
+
+							break;
+					}
+					console.log('data setelah stepping stone', data);
+				}
+				else {
+					$('#stepping-stone').fadeOut(500);
+				}
+
+				// itung nilai Steping Stone
+				var totalSs = 0;
+				var txt = 'Hasil Stepping Stone Total Cost = ';
+				for (var i = 0; i < jmlSupply; i++) {
+					for (var j = 0; j < jmlDemand; j++) {
+						if (data[i][j].x != 0) {
+							txt += data[i][j].cost + ' × ' + data[i][j].x;
+							if (i < jmlSupply - 1) {
+								txt += ' + ';
+							}
+
+							totalSs += data[i][j].cost * data[i][j].x;
+						}
+					}
+				}
+
+				//step stepping stone
+				var step = 'Tahap Stepping Stone Ongkir Cost = ';
+				for (var i = 0; i < jmlSupply; i++) {
+					for (var j = 0; j < jmlDemand; j++) {
+						if (data[i][j].x != 0) {
+							index1 = i+1;
+								index2 =j+1;
+							if(j == 0){
+								
+								step += 'c'+ index1 + index2;
+							
+							}
+							if (j % 2 == 0 && j != 0) {
+								if (i < jmlSupply - 1) {
+									step += ' + ';
+									step +=  'c'+ index1 + index2;
+								}
+
+								
+								
+							}
+							if (j % 2 == 1 && j != 0) {
+					
+								if (i < jmlSupply - 1) {
+									step += ' - ';
+									step +=  'c'+ index1 + index2;
+								}
+
+								
+							}
+						}
+
+					}
+				}
+
+				// itung nilai Steping Stone
+				var totalOng = 0;
+				var txt2 = 'Hasil Stepping Stone Ongkir Cost = ';
+				for (var i = 0; i < jmlSupply; i++) {
+					for (var j = 0; j < jmlDemand; j++) {
+						if (data[i][j].x != 0) {
+							if(j == 0){
+								txt2 += data[i][j].cost;
+								
+								totalOng += parseInt(data[i][j].cost);
+							}
+							if (j % 2 == 0 && j != 0) {
+								if (i < jmlSupply - 1) {
+									txt2 += ' + ';
+									txt2 += data[i][j].cost;
+									totalOng += parseInt(data[i][j].cost);
+									console.log(data[i][j].cost)
+								}
+
+								
+								
+							}
+							console.log(totalOng);
+							if (j % 2 == 1 && j != 0) {
+					
+								if (i < jmlSupply - 1) {
+									txt2 += ' - ';
+									txt2 += data[i][j].cost;
+									totalOng -= parseInt(data[i][j].cost);
+
+									console.log(data[i][j].cost)
+								}
+
+								
+							}
+							console.log(totalOng);
+						}
+
+					}
+				}
+
+				txt += ' = ' + totalSs;
+				var hasil = $('#hasil-ss').clone();
+				hasil.html(txt);
+				$('.container').append(hasil);
+				hasil.fadeIn(500);
+
+				step += ' : ' ;
+				var hasil2 = $('#hasil-step').clone();
+				hasil2.html(step);
+				$('.container').append(hasil2);
+				hasil2.fadeIn(500);
+
+				txt2 += ' = ' + totalOng;
+				var hasil3 = $('#hasil-ss2').clone();
+				hasil3.html(txt2);
+				$('.container').append(hasil3);
+				hasil3.fadeIn(500);
+			});
+		});
+	</script>
+</body>
+
+</html>
